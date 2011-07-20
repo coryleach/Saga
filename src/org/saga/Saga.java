@@ -9,10 +9,15 @@ import java.util.logging.*;
 
 //imports from this project
 import org.sk89q.*;
+import org.saga.utility.*;
+import org.saga.exceptions.*;
 
 //External Imports
 import java.util.*;
+import java.io.*;
 import org.bukkit.*;
+import org.bukkit.event.*;
+import org.bukkit.event.Event.Priority;
 import org.bukkit.entity.*;
 import org.bukkit.plugin.*;
 import org.bukkit.plugin.java.*;
@@ -20,6 +25,7 @@ import org.anjocaido.groupmanager.*;
 import org.anjocaido.groupmanager.data.*;
 import org.anjocaido.groupmanager.dataholder.*;
 import org.anjocaido.groupmanager.dataholder.worlds.*;
+
 
 /**
  *
@@ -35,7 +41,11 @@ public class Saga extends JavaPlugin {
     //Instance Members
     private static CommandsManager<Player> commandMap;
     public WorldsHolder worldsHolder;
+    private boolean playerInformationLoadingDisabled;
+    private boolean playerInformationSavingDisabled;
+    private Properties balanceProperties;
     private HashMap<String,SagaPlayer> sagaPlayers;
+    private SagaPlayerListener playerListener;
 
     public Saga() {
 
@@ -72,13 +82,13 @@ public class Saga extends JavaPlugin {
         //Allocate Instance Variables
         sagaPlayers = new HashMap<String,SagaPlayer>();
 
-        PluginManager pm = getServer().getPluginManager();
+        PluginManager pluginManager = getServer().getPluginManager();
         Plugin test = null;
 
         //Test for specific plugins
-        test = pm.getPlugin("GroupManager");
+        test = pluginManager.getPlugin("GroupManager");
         if ( test != null ) {
-            log.info("Legends found Group Manager plugin!");
+            Saga.info("Saga found Group Manager plugin!");
             worldsHolder = ((GroupManager)test).getWorldsHolder();
         }
 
@@ -99,35 +109,31 @@ public class Saga extends JavaPlugin {
 
         };
 
+        // Read balance information:
+        balanceProperties = new Properties();
         try {
-
-            // Register events
-            //pm.registerEvent(Event.Type.ENTITY_DAMAGE, entityListener, Priority.Normal, this);
-
-
-    	} catch ( Exception e ) {
-
-            Saga.severe("Exception Registering Events: ");
-            Saga.severe(e.getMessage());
-            e.printStackTrace();
-
+            balanceProperties = WriterReader.readBalanceInformation();
+        } catch (FileNotFoundException e) {
+            Saga.severe("Missing balance information.");
+            //TODO Create new file with default balance information and add .info for it
+        }catch (IOException e) {
+            Saga.exception("Balance information load failure.",e);
         }
 
-        try {
+        //Create listeners
+        playerListener = new SagaPlayerListener(this);
 
-            //Register Command Classes to the command map
-            //commandMap.register(SagaCommands.class);
+        // Register events
+        pluginManager.registerEvent(Event.Type.PLAYER_JOIN, playerListener, Priority.Normal, this);
+        pluginManager.registerEvent(Event.Type.PLAYER_QUIT, playerListener, Priority.Normal, this);
 
-    	} catch ( Exception e ) {
+        //Register Command Classes to the command map
+        commandMap.register(SagaCommands.class);
 
-            Saga.severe("Exception Registering Command Classes: ");
-            Saga.severe(e.getMessage());
-            e.printStackTrace();
+    }
 
-    	}
-
-        // TODO: Place any custom enable code here including the registration of any events
-
+    public Properties getBalanceProperties() {
+        return balanceProperties;
     }
 
     public SagaPlayer wrapPlayer(Player player) {
@@ -144,27 +150,25 @@ public class Saga extends JavaPlugin {
             return wrappedPlayer;
         }
 
+        Saga.debug("wrapping player "+player.getName());
+
         //Second try, attempt to load data from file
-        /*if ( playerDataExists(player) ) {
-
-            if ( !loadPlayerData(player) ) {
-                log.severe("Failed to load player data!");
-            }
-
-            wrappedPlayer = playerMap.get(player.getName());
-
-            if ( wrappedPlayer != null ) {
-                wrappedPlayer.setHandle(wrappedPlayer.getHandle());
-                return wrappedPlayer;
-            }
-
-        }*/
-
-        //Finally just make a new wrap around player
-        wrappedPlayer = new SagaPlayer(player);
-        sagaPlayers.put(player.getName(), wrappedPlayer);
+        try {
+            wrappedPlayer = SagaPlayer.load(player.getName());
+        } catch( SagaPlayerNotFoundException e ) {
+            //Player With New Data
+            wrappedPlayer = new SagaPlayer(player,balanceProperties);
+        }
 
         return wrappedPlayer;
+
+    }
+
+    public void addPlayer(Player player) {
+
+    	// Wrap the player and add him:
+    	sagaPlayers.put(player.getName(), wrapPlayer(player));
+        Saga.debug("adding player "+player.getName());
 
     }
 
@@ -177,10 +181,17 @@ public class Saga extends JavaPlugin {
 
         SagaPlayer sagaPlayer = sagaPlayers.remove(player.getName());
 
-        //TODO: Save Player Info Here
-        /*if ( !SagaPlayer.save() ) {
-            Saga.severe("Failed to save player legends data!");
-        }*/
+        if ( sagaPlayer == null ) {
+            Saga.warning("SagaPlayer does not exist for player!",player);
+            return;
+        }
+
+        //Try to save player data
+        try {
+            sagaPlayer.save();
+        } catch ( IOException e ) {
+            Saga.exception("Exception while writing player " + player.getName() + " data to disk.",e);
+        }
 
     }
 
@@ -240,8 +251,48 @@ public class Saga extends JavaPlugin {
 
     }
 
+    /**
+     * True, if player information loading is disabled.
+     *
+     * @return the playerInformationLoadingDisabled
+     */
+    public boolean isPlayerInformationLoadingDisabled() {
+            return playerInformationLoadingDisabled;
+    }
+
+    /**
+     * True, if player information saving is disabled.
+     *
+     * @return the playerInformationSavingDisabled
+     */
+    public boolean isPlayerInformationSavingDisabled() {
+            return playerInformationSavingDisabled;
+    }
+
+    /**
+     * Disables the loading and saving of player information.
+     *
+     */
+    public void disablePlayerInformationSavingLoading() {
+
+            if( playerInformationLoadingDisabled && playerInformationSavingDisabled ){
+                    return;
+            }
+
+            playerInformationLoadingDisabled = true;
+            playerInformationSavingDisabled = true;
+
+            Saga.debug("Disabling player information saving and loading.");
+
+    }
+
     //Debug/Log Output Functions
     static public void info(String string) {
+        log.info(string);
+    }
+
+    static public void info(String string,Player player) {
+        string = "(" + player.getName() + ")" + string;
         log.info(string);
     }
 
@@ -249,8 +300,23 @@ public class Saga extends JavaPlugin {
         log.severe(string);
     }
 
+    static public void severe(String string,Player player) {
+        string = "(" + player.getName() + ")" + string;
+        log.severe(string);
+    }
+
     static public void warning(String string) {
         log.warning(string);
+    }
+
+    static public void warning(String string,Player player) {
+        string = "(" + player.getName() + ")" + string;
+        log.warning(string);
+    }
+
+    static public void exception(String string, Exception e) {
+        string = string + " [" + e.getClass().getSimpleName() + "]" + e.getMessage();
+        log.severe(string);
     }
 
     static public void debug(String string) {
@@ -268,5 +334,18 @@ public class Saga extends JavaPlugin {
 
     }
 
+    static public void debug(String string, Player player) {
+
+        if ( !debugging ) {
+            return;
+        }
+
+
+        string = "[DEBUG] " + string;
+
+        //Set to log
+        log.info(string);
+
+    }
 
 }

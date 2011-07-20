@@ -33,6 +33,8 @@ public class SagaPlayerListener extends PlayerListener {
     @Override
     public void onPlayerJoin(PlayerJoinEvent event) {
 
+        plugin.addPlayer(event.getPlayer());
+
     }
 
     @Override

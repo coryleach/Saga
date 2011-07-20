@@ -1,4 +1,4 @@
-package com.coryleach.util;
+package org.saga.utility;
 
 //This file was originally taken from mcFaction
 

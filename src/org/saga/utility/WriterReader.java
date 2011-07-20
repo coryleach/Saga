@@ -1,11 +1,9 @@
-package me.andf54.factio;
+package org.saga.utility;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.Properties;
+
+import org.saga.*;
 
 public class WriterReader {
 
@@ -34,15 +32,14 @@ public class WriterReader {
 	 * 
 	 * @throws IOException If an error occurred while reading
 	 */
-	public static Properties readPlayerInformation(String pPlayerName) throws IOException {
+	public static Properties readPlayerInformation(String pPlayerName) throws IOException,FileNotFoundException {
 
-		
 		Properties playerInfo= new Properties();
-		FileInputStream in = new FileInputStream(new File(PLAYER_INFORMATION_DIRECTORY+File.separator+pPlayerName+".dat"));
+                File file = new File(PLAYER_INFORMATION_DIRECTORY+File.separator+pPlayerName+".dat");
+		FileInputStream in = new FileInputStream(file);
 		playerInfo.load(in);
 		in.close();
 		return playerInfo;
-		
 		
 	}
 	
@@ -58,20 +55,22 @@ public class WriterReader {
 	 */
 	public static void writePlayerInformation(String pPlayerName, Properties playerInfo) throws IOException {
 
-		
-		File directory= new File(PLAYER_INFORMATION_DIRECTORY+File.separator+pPlayerName+".dat");
-		if(!(new File(PLAYER_INFORMATION_DIRECTORY+File.separator).exists())){
-			(new File(PLAYER_INFORMATION_DIRECTORY+File.separator)).mkdirs();
-			System.out.println("Creating "+PLAYER_INFORMATION_DIRECTORY+File.separator+" directory.");
-		}
-		if(!directory.exists()){
-			directory.createNewFile();
-		}
-		FileOutputStream out = new FileOutputStream(directory);
-		playerInfo.store(out, pPlayerName+" player information");
-		out.flush();
-		out.close();
-		
+            File file = new File(PLAYER_INFORMATION_DIRECTORY+File.separator+pPlayerName+".dat");
+            File directory = new File(PLAYER_INFORMATION_DIRECTORY+File.separator);
+
+            if( !directory.exists() ) {
+                directory.mkdirs();
+                Saga.info("Creating "+PLAYER_INFORMATION_DIRECTORY+File.separator+" directory.");
+            }
+
+            if(!directory.exists()){
+                    directory.createNewFile();
+            }
+
+            FileOutputStream out = new FileOutputStream(directory);
+            playerInfo.store(out, pPlayerName+" player information");
+            out.flush();
+            out.close();
 		
 	}
 	
@@ -84,12 +83,11 @@ public class WriterReader {
 	 */
 	public static Properties readBalanceInformation() throws IOException {
 
-		Properties balanceInfo= new Properties();
-		FileInputStream in = new FileInputStream(new File(BALANCE_INFORMATION_DIRECTORY));
-		balanceInfo.load(in);
-		in.close();
-		return balanceInfo;
-		
+            Properties balanceInfo= new Properties();
+            FileInputStream in = new FileInputStream(new File(BALANCE_INFORMATION_DIRECTORY));
+            balanceInfo.load(in);
+            in.close();
+            return balanceInfo;
 		
 	}
 	
